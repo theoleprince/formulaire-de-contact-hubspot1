@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Formulaire de mise à jour HubSpot</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; }
+    label { display: block; margin-top: 15px; font-weight: bold; }
+    select, textarea, button { width: 100%; padding: 8px; margin-top: 5px; }
+    button { background-color: #007aff; color: white; border: none; cursor: pointer; margin-top: 20px; }
+    button:hover { background-color: #005bb5; }
+  </style>
+</head>
+<body>
+  <h2>Mise à jour d’un contact HubSpot</h2>
+
+  <form id="update-form">
+    <label for="owner">Propriétaire</label>
+    <select id="owner" required></select>
+
+    <label for="contact">Contact</label>
+    <select id="contact" required></select>
+
+    <label for="status">Statut</label>
+    <select id="status" required></select>
+
+    <label for="note">Note / Commentaire</label>
+    <textarea id="note" rows="4" placeholder="Ajoutez une note ici..."></textarea>
+
+    <button type="submit">Enregistrer</button>
+  </form>
+
+  <script>
+    const token = localStorage.getItem("hubspotToken");
+    if (!token) {
+      alert("Veuillez définir le token HubSpot via la console");
+    }
+
+    async function fetchOwners() {
+      const res = await fetch('https://api.hubapi.com/owners/v2/owners', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const select = document.getElementById('owner');
+      data.forEach(owner => {
+        const opt = document.createElement('option');
+        opt.value = owner.ownerId;
+        opt.textContent = owner.firstName + ' ' + owner.lastName;
+        select.appendChild(opt);
+      });
+    }
+
+    async function fetchContacts() {
+      const res = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?properties=firstname,lastname,email&limit=50', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const select = document.getElementById('contact');
+      data.results.forEach(contact => {
+        const opt = document.createElement('option');
+        opt.value = contact.id;
+        const props = contact.properties;
+        opt.textContent = `${props.firstname || ''} ${props.lastname || ''} (${props.email || ''})`;
+        select.appendChild(opt);
+      });
+    }
+
+    async function fetchStatuses() {
+      const res = await fetch('https://api.hubapi.com/properties/v2/contacts/properties/named/hs_status', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const select = document.getElementById('status');
+      data.options.forEach(optData => {
+        const opt = document.createElement('option');
+        opt.value = optData.value;
+        opt.textContent = optData.label;
+        select.appendChild(opt);
+      });
+    }
+
+    async function submitForm(e) {
+      e.preventDefault();
+      const contactId = document.getElementById('contact').value;
+      const ownerId = document.getElementById('owner').value;
+      const status = document.getElementById('status').value;
+      const note = document.getElementById('note').value;
+
+      // 1. Mise à jour du contact
+      const res = await fetch(`https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          properties: {
+            hubspot_owner_id: ownerId,
+            hs_status: status
+          }
+        })
+      });
+
+      // 2. Ajout de la note en tant qu’engagement (note)
+      if (note.trim() !== '') {
+        await fetch('https://api.hubapi.com/engagements/v1/engagements', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            engagement: {
+              active: true,
+              type: 'NOTE',
+              ownerId: parseInt(ownerId)
+            },
+            associations: {
+              contactIds: [parseInt(contactId)]
+            },
+            metadata: {
+              body: note
+            }
+          })
+        });
+      }
+
+      alert("Contact mis à jour avec succès !");
+      document.getElementById("update-form").reset();
+    }
+
+    // Chargement initial
+    fetchOwners();
+    fetchContacts();
+    fetchStatuses();
+
+    // Gestion du formulaire
+    document.getElementById('update-form').addEventListener('submit', submitForm);
+  </script>
+</body>
+</html>
