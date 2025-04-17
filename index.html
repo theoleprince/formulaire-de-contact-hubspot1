@@ -35,7 +35,6 @@
     if (!token) {
       alert("Veuillez définir le token HubSpot via la console");
     }
-
     async function fetchOwners() {
       const res = await fetch('https://api.hubapi.com/owners/v2/owners', {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -52,7 +51,7 @@
 
     async function fetchContacts() {
       const res = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?properties=firstname,lastname,email&limit=50', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem("hubspotToken")}` }
       });
       const data = await res.json();
       const select = document.getElementById('contact');
